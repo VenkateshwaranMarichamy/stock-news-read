@@ -1,0 +1,42 @@
+# MoneyControl Stocks Scraper — Configuration
+# ============================================
+# Edit this file to control which URLs are scraped and which sections
+# are included in the output JSON.
+
+# ---------------------------------------------------------------------------
+# urls: List of MoneyControl "Stocks to Watch" article URLs to scrape.
+# Add one URL per line (prefix with - ).
+# These are used when you run the scraper without passing URLs on the command
+# line.  Command-line URLs always take priority over this list.
+# ---------------------------------------------------------------------------
+urls:
+  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-apollo-hospitals-jubilant-foodworks-hg-infra-pace-digitek-gpt-infra-metro-brands-teamlease-sammaan-capital-in-focus-on-21-may-13925662.html"
+  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-hindalco-ab-capital-ask-automotive-dredging-corp-ptc-india-mankind-pharma-karnataka-bank-zee-entertainment-in-focus-on-20-may-13924344.html"
+  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-vascon-engineers-puravankara-afcons-infra-jk-paper-ge-vernova-doms-gnfc-goldline-pharmaceutical-in-focus-on-19-may-13923100.html"
+  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-emcure-aurobindo-pharma-hfcl-rbl-bank-coal-india-tata-steel-itc-hotels-power-grid-godfrey-phillips-in-focus-on-18-may-13921679.html"
+
+# ---------------------------------------------------------------------------
+# sections: Whitelist of section titles to keep in the output.
+# Only sections whose title matches one of these strings (case-insensitive,
+# partial match) will appear in the JSON.
+# Leave this list empty (sections: []) to include ALL sections found.
+# ---------------------------------------------------------------------------
+sections:
+  - "Stocks to Watch"
+  - "Bulk Deals"
+  - "Bulk and Block Deals"
+  - "Block Deals"
+
+# ---------------------------------------------------------------------------
+# output_dir: Folder where JSON output files are saved automatically.
+# Each run creates a timestamped file: YYYY-MM-DD_HH-MM-SS.json
+# The folder is created if it does not exist.
+# You can override this with --output on the command line.
+# ---------------------------------------------------------------------------
+output_dir: "output"
+
+# ---------------------------------------------------------------------------
+# delay: Seconds to wait between consecutive HTTP requests.
+# Increase this if you see rate-limiting errors from MoneyControl.
+# ---------------------------------------------------------------------------
+delay: 1.0
