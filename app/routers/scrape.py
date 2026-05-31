@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from app.db.writer import DB_Writer
 from app.schemas import ScrapeRequest, ScrapeResponse
+from moneycontrol_scraper.config import filter_sections
 from moneycontrol_scraper.exceptions import ScraperFetchError
 from moneycontrol_scraper.http_client import HTTPClient
 from moneycontrol_scraper.models import OutputRecord
@@ -27,7 +28,7 @@ router = APIRouter()
 
 
 def _run_scraper(
-    urls: list[str], delay: float
+    urls: list[str], delay: float, section_whitelist: list[str]
 ) -> tuple[list[OutputRecord], list[dict]]:
     """Run the synchronous scraper for each URL.
 
@@ -47,6 +48,9 @@ def _run_scraper(
         try:
             html = http_client.fetch(url)
             record = parser.parse(html, url)
+            # Apply section whitelist from config (same as CLI behaviour)
+            if section_whitelist:
+                record.sections = filter_sections(record.sections, section_whitelist)
             records.append(record)
         except ScraperFetchError as exc:
             logger.error("Failed to fetch %s: %s", url, exc)
@@ -82,7 +86,7 @@ async def scrape(request: ScrapeRequest, req: Request) -> ScrapeResponse:
     # Run synchronous scraper in thread pool to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     records, failures = await loop.run_in_executor(
-        None, _run_scraper, url_strings, config.delay
+        None, _run_scraper, url_strings, config.delay, config.sections
     )
 
     # All URLs failed → 502
