@@ -4,16 +4,24 @@
 # are included in the output JSON.
 
 # ---------------------------------------------------------------------------
+# output_mode: Where to send scraper output.
+#   file     — write JSON to output_dir (default, backward-compatible)
+#   database — insert into PostgreSQL only
+#   both     — write JSON file AND insert into PostgreSQL
+# DB credentials are read from .env (DB_HOST, DB_PORT, DB_NAME, DB_USER,
+# DB_PASSWORD, DB_SCHEMA). No database: section needed in this file.
+# ---------------------------------------------------------------------------
+output_mode: "database"
+
+# ---------------------------------------------------------------------------
 # urls: List of MoneyControl "Stocks to Watch" article URLs to scrape.
 # Add one URL per line (prefix with - ).
 # These are used when you run the scraper without passing URLs on the command
 # line.  Command-line URLs always take priority over this list.
 # ---------------------------------------------------------------------------
 urls:
-  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-apollo-hospitals-jubilant-foodworks-hg-infra-pace-digitek-gpt-infra-metro-brands-teamlease-sammaan-capital-in-focus-on-21-may-13925662.html"
-  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-hindalco-ab-capital-ask-automotive-dredging-corp-ptc-india-mankind-pharma-karnataka-bank-zee-entertainment-in-focus-on-20-may-13924344.html"
-  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-vascon-engineers-puravankara-afcons-infra-jk-paper-ge-vernova-doms-gnfc-goldline-pharmaceutical-in-focus-on-19-may-13923100.html"
-  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-emcure-aurobindo-pharma-hfcl-rbl-bank-coal-india-tata-steel-itc-hotels-power-grid-godfrey-phillips-in-focus-on-18-may-13921679.html"
+  - "https://www.moneycontrol.com/news/business/markets/stocks-in-news-biocon-pb-fintech-polycab-india-south-indian-bank-shree-cement-kaiser-corp-acme-solar-nitco-in-focus-on-may-7-13910990.html"
+  - "https://www.moneycontrol.com/news/business/markets/stocks-to-watch-today-vedanta-larsen-and-toubro-indian-hume-pipe-bajaj-finance-schaeffler-india-motilal-oswal-navin-flourine-iifl-finance-in-focus-on-30-april-13903878.html"
 
 # ---------------------------------------------------------------------------
 # sections: Whitelist of section titles to keep in the output.
@@ -23,6 +31,7 @@ urls:
 # ---------------------------------------------------------------------------
 sections:
   - "Stocks to Watch"
+  - "Stocks in news"
   - "Bulk Deals"
   - "Bulk and Block Deals"
   - "Block Deals"

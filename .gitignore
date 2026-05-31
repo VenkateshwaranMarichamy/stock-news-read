@@ -20,6 +20,7 @@ env/
 build/
 dist/
 *.egg-info/
+output/
 
 # Secrets
 .env
