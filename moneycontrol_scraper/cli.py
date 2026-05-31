@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 import sys
 import time
@@ -192,14 +193,41 @@ def main() -> None:
         if index < len(urls) - 1:
             time.sleep(delay)
 
-    # --- Serialise and write ------------------------------------------------
-    json_str = serialise(records)
+    # --- Serialise and write (file output) ----------------------------------
+    had_error = False
 
-    try:
-        write_output(json_str, output_path)
-        logging.info("Output written to: %s", output_path)
-    except ScraperOutputError as exc:
-        print(str(exc), file=sys.stderr)
-        sys.exit(1)
+    if cfg.output_mode in {"file", "both"}:
+        json_str = serialise(records)
+        try:
+            write_output(json_str, output_path)
+            logging.info("Output written to: %s", output_path)
+        except ScraperOutputError as exc:
+            logging.error("File write failed: %s", exc)
+            had_error = True
 
-    sys.exit(0)
+    # --- Database output ----------------------------------------------------
+    if cfg.output_mode in {"database", "both"} and records:
+        try:
+            from app.db.pool import create_pool, close_pool  # noqa: PLC0415
+            from app.db.writer import DB_Writer  # noqa: PLC0415
+
+            async def _write_to_db() -> None:
+                pool = await create_pool(cfg.database)
+                try:
+                    writer = DB_Writer(pool, cfg.database.schema)
+                    inserted, skipped = await writer.write_batch(records)
+                    logging.info(
+                        "Database write complete: %d inserted, %d skipped.",
+                        inserted,
+                        skipped,
+                    )
+                finally:
+                    from app.db.pool import close_pool as _close  # noqa: PLC0415
+                    await _close(pool)
+
+            asyncio.run(_write_to_db())
+        except Exception as exc:  # noqa: BLE001
+            logging.error("Database write failed: %s", exc)
+            had_error = True
+
+    sys.exit(1 if had_error else 0)

@@ -4,6 +4,16 @@
 # are included in the output JSON.
 
 # ---------------------------------------------------------------------------
+# output_mode: Where to send scraper output.
+#   file     — write JSON to output_dir (default, backward-compatible)
+#   database — insert into PostgreSQL only
+#   both     — write JSON file AND insert into PostgreSQL
+# DB credentials are read from .env (DB_HOST, DB_PORT, DB_NAME, DB_USER,
+# DB_PASSWORD, DB_SCHEMA). No database: section needed in this file.
+# ---------------------------------------------------------------------------
+output_mode: "database"
+
+# ---------------------------------------------------------------------------
 # urls: List of MoneyControl "Stocks to Watch" article URLs to scrape.
 # Add one URL per line (prefix with - ).
 # These are used when you run the scraper without passing URLs on the command
