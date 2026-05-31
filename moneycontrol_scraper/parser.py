@@ -217,6 +217,28 @@ class ArticleParser:
 
             tag_name = element.name.lower() if element.name else ""
 
+            # ---- Case 1: combo paragraph — section label + first stock in same <p> ----
+            # Pattern: <p><strong>Section Label</strong><a href="...">Stock</a>text</p>
+            # The <strong> has no link, but the <p> also contains an <a> tag.
+            # We split this into: start a new section, then treat the <a>+text as a stock entry.
+            if tag_name == "p":
+                combo = _split_combo_paragraph(element)
+                if combo is not None:
+                    section_label, stock_name, stock_text = combo
+                    # Flush any in-flight stock from the previous section
+                    _flush_stock()
+                    current_section = section_label
+                    current_stock = None
+                    current_paragraphs = []
+                    if current_section not in sections:
+                        sections[current_section] = {}
+                    # Now record the first stock entry
+                    current_stock = stock_name
+                    sections[current_section][current_stock] = ""
+                    if stock_text:
+                        current_paragraphs = [stock_text]
+                    continue
+
             # ---- Stock sub-heading? (only meaningful inside a section) -----
             # Check stock heading BEFORE section heading when inside a section,
             # so that heading tags (h3–h6) containing a link are treated as
@@ -232,6 +254,12 @@ class ArticleParser:
                 # Ensure the stock key exists (Req 3.6 — empty string default)
                 if current_stock not in sections[current_section]:
                     sections[current_section][current_stock] = ""
+
+                # Capture any inline text that follows the <a> tag within the
+                # same <p> (e.g. <p><a>Stock:</a> news text here</p>)
+                inline_text = _get_inline_text_after_link(element)
+                if inline_text:
+                    current_paragraphs = [inline_text]
                 continue
 
             # ---- Section heading? ----------------------------------------
@@ -312,6 +340,93 @@ def _remove_noise_elements(container: Tag) -> None:
     for noise_class in _NOISE_CLASSES:
         for el in container.find_all(True, class_=noise_class):
             el.decompose()
+
+
+def _split_combo_paragraph(element: Tag) -> tuple[str, str, str] | None:
+    """Detect and split a "combo paragraph" that contains both a section label
+    and the first stock entry in the same ``<p>`` tag.
+
+    MoneyControl's "Stocks in news" articles sometimes use this pattern:
+
+        <p>
+          <strong>Stocks in news </strong>
+          <a href="...">Biocon Limited:</a>
+          The company has denied reports...
+        </p>
+
+    This function returns ``(section_label, stock_name, stock_text)`` when the
+    pattern is detected, or ``None`` otherwise.
+
+    Detection criteria:
+    - The element is a ``<p>`` tag.
+    - Its first Tag child is a ``<strong>`` or ``<b>`` that does NOT contain
+      an ``<a>`` tag (i.e. it is a section label, not a stock heading).
+    - The ``<p>`` also contains at least one ``<a>`` tag (the first stock).
+
+    Args:
+        element: A BeautifulSoup Tag to inspect.
+
+    Returns:
+        ``(section_label, stock_name, stock_text)`` or ``None``.
+    """
+    if element.name.lower() != "p":
+        return None
+
+    first_tag = _first_tag_child(element)
+    if first_tag is None:
+        return None
+
+    first_name = first_tag.name.lower()
+    if first_name not in ("strong", "b"):
+        return None
+
+    # The bold tag must NOT contain a link (otherwise it's a stock heading)
+    if first_tag.find("a") is not None:
+        return None
+
+    # The <p> must contain at least one <a> tag after the bold label
+    a_tag = element.find("a")
+    if a_tag is None:
+        return None
+
+    # Extract section label from the bold tag
+    section_label = _get_text(first_tag).strip()
+    if not section_label:
+        return None
+
+    # Extract stock name from the first <a> tag
+    stock_name = _get_text(a_tag).strip()
+    # Strip trailing colon that MoneyControl sometimes appends (e.g. "Biocon Limited:")
+    stock_name = stock_name.rstrip(":").strip()
+    if not stock_name:
+        return None
+
+    # Extract the remaining text after the <a> tag as the stock's news text.
+    # Walk siblings of the <a> tag within the <p> to collect trailing text nodes.
+    text_parts: list[str] = []
+    collecting = False
+    for child in element.children:
+        if child is a_tag:
+            collecting = True
+            continue
+        if collecting:
+            if isinstance(child, Comment):
+                continue
+            if isinstance(child, NavigableString):
+                part = str(child).strip()
+                if part:
+                    text_parts.append(part)
+            elif isinstance(child, Tag):
+                # Collect text from any inline tags after the <a> (e.g. <strong></strong>)
+                part = _get_text(child).strip()
+                if part:
+                    text_parts.append(part)
+
+    stock_text = " ".join(text_parts).strip()
+    # Strip leading colon/dash that sometimes precedes the news text
+    stock_text = stock_text.lstrip(":").strip()
+
+    return section_label, stock_name, stock_text
 
 
 # ---------------------------------------------------------------------------
@@ -444,15 +559,48 @@ def _get_stock_name(element: Tag) -> str:
 
     Prefers the text of the first ``<a>`` tag found (Req 3.1).
     Falls back to the full element text.
+    Strips trailing colons that MoneyControl sometimes appends (e.g. "Biocon:").
     """
-    # Look for a direct <a> child first.
     a_tag = element.find("a")
     if a_tag is not None:
-        text = _get_text(a_tag).strip()
+        text = _get_text(a_tag).strip().rstrip(":").strip()
         if text:
             return text
 
-    return _get_text(element).strip()
+    return _get_text(element).strip().rstrip(":").strip()
+
+
+def _get_inline_text_after_link(element: Tag) -> str:
+    """Return any text that follows the first ``<a>`` tag within *element*.
+
+    Used to capture inline news text in patterns like:
+        ``<p><a href="...">Stock Name:</a> News text here.</p>``
+
+    Returns an empty string if there is no trailing text.
+    """
+    a_tag = element.find("a")
+    if a_tag is None:
+        return ""
+
+    parts: list[str] = []
+    collecting = False
+    for child in element.children:
+        if child is a_tag:
+            collecting = True
+            continue
+        if collecting:
+            if isinstance(child, Comment):
+                continue
+            if isinstance(child, NavigableString):
+                part = str(child).strip().lstrip(":").strip()
+                if part:
+                    parts.append(part)
+            elif isinstance(child, Tag):
+                part = _get_text(child).strip().lstrip(":").strip()
+                if part:
+                    parts.append(part)
+
+    return " ".join(parts).strip()
 
 
 def _meaningful_children(element: Tag) -> list[Tag]:
