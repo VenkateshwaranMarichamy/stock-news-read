@@ -1,0 +1,332 @@
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.event_batches
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.event_batches_id_seq'::regclass),
+    batch_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    ingestion_source ingestion_source_enum NOT NULL DEFAULT 'manual'::ingestion_source_enum,
+    notes text COLLATE pg_catalog."default",
+    started_at timestamp with time zone NOT NULL DEFAULT now(),
+    completed_at timestamp with time zone,
+    total_events integer DEFAULT 0,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone,
+    CONSTRAINT event_batches_pkey PRIMARY KEY (id)
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.events
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.events_id_seq'::regclass),
+    stock_id integer NOT NULL,
+    batch_id integer,
+    event_type event_type_enum NOT NULL,
+    event_subtype character varying(80) COLLATE pg_catalog."default" NOT NULL,
+    signal_type signal_type_enum NOT NULL DEFAULT 'neutral'::signal_type_enum,
+    signal_reason text COLLATE pg_catalog."default",
+    sentiment sentiment_enum NOT NULL DEFAULT 'neutral'::sentiment_enum,
+    priority priority_enum NOT NULL DEFAULT 'low'::priority_enum,
+    impact_score integer,
+    confidence_score numeric(4,3),
+    confidence_model_version character varying(30) COLLATE pg_catalog."default",
+    tags text[] COLLATE pg_catalog."default" DEFAULT '{}'::text[],
+    title character varying(500) COLLATE pg_catalog."default" NOT NULL,
+    summary text COLLATE pg_catalog."default",
+    event_date date NOT NULL,
+    source_url text COLLATE pg_catalog."default",
+    source_name character varying(100) COLLATE pg_catalog."default",
+    ingestion_source ingestion_source_enum NOT NULL DEFAULT 'manual'::ingestion_source_enum,
+    is_verified boolean NOT NULL DEFAULT false,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone,
+    CONSTRAINT events_pkey PRIMARY KEY (id),
+    CONSTRAINT events_batch_id_fkey FOREIGN KEY (batch_id)
+        REFERENCES stoxscoop_dev.event_batches (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE SET NULL,
+    CONSTRAINT fk_events_stock FOREIGN KEY (stock_id)
+        REFERENCES classification.ticker_symbol (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT fk_events_subtype FOREIGN KEY (event_type, event_subtype)
+        REFERENCES stoxscoop_dev.event_subtypes (event_type, subtype_code) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT chk_confidence_version CHECK (confidence_score IS NULL OR confidence_model_version IS NOT NULL)
+)
+
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.event_subtypes
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.event_subtypes_id_seq'::regclass),
+    event_type event_type_enum NOT NULL,
+    subtype_code character varying(80) COLLATE pg_catalog."default" NOT NULL,
+    label character varying(120) COLLATE pg_catalog."default" NOT NULL,
+    description text COLLATE pg_catalog."default",
+    default_signal signal_type_enum NOT NULL DEFAULT 'neutral'::signal_type_enum,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone,
+    CONSTRAINT event_subtypes_pkey PRIMARY KEY (id),
+    CONSTRAINT event_subtypes_event_type_subtype_code_key UNIQUE (event_type, subtype_code)
+)
+
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.business_event_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.business_event_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    contract_type contract_type_enum,
+    client_name character varying(255) COLLATE pg_catalog."default",
+    client_sector character varying(100) COLLATE pg_catalog."default",
+    contract_value numeric(18,2),
+    capex_amount numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    duration_years numeric(5,1),
+    geography character varying(100) COLLATE pg_catalog."default",
+    project_name character varying(255) COLLATE pg_catalog."default",
+    expected_completion date,
+    jv_partner character varying(255) COLLATE pg_catalog."default",
+    ownership_pct numeric(5,2),
+    is_repeat_order boolean DEFAULT false,
+    description text COLLATE pg_catalog."default",
+    campaign_name character varying(50) COLLATE pg_catalog."default",
+    target_revenue numeric(18,2),
+    target_timeline character varying(50) COLLATE pg_catalog."default",
+    product_name character varying(100) COLLATE pg_catalog."default",
+    target_geography character varying(255) COLLATE pg_catalog."default",
+    target_segment character varying(255) COLLATE pg_catalog."default",
+    CONSTRAINT business_event_details_pkey PRIMARY KEY (id),
+    CONSTRAINT business_event_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT business_event_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.corporate_action_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.corporate_action_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    record_date date,
+    effective_date date,
+    ratio character varying(30) COLLATE pg_catalog."default",
+    amount_per_share numeric(18,4),
+    total_size numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    target_company character varying(255) COLLATE pg_catalog."default",
+    swap_ratio character varying(30) COLLATE pg_catalog."default",
+    offer_price numeric(18,2),
+    description text COLLATE pg_catalog."default",
+    stake_acquired_pct numeric(5,2),
+    resulting_stake_pct numeric(5,2),
+    shares_transacted bigint,
+    CONSTRAINT corporate_action_details_pkey PRIMARY KEY (id),
+    CONSTRAINT corporate_action_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT corporate_action_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.credit_rating_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.credit_rating_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    agency rating_agency_enum NOT NULL,
+    instrument_type character varying(100) COLLATE pg_catalog."default",
+    instrument_name character varying(255) COLLATE pg_catalog."default",
+    rating_before character varying(20) COLLATE pg_catalog."default",
+    rating_after character varying(20) COLLATE pg_catalog."default",
+    outlook_before character varying(20) COLLATE pg_catalog."default",
+    outlook_after character varying(20) COLLATE pg_catalog."default",
+    rated_amount numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    rationale text COLLATE pg_catalog."default",
+    rating_date date,
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT credit_rating_details_pkey PRIMARY KEY (id),
+    CONSTRAINT credit_rating_details_event_id_key UNIQUE (event_id),
+        CONSTRAINT credit_rating_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.disclosure_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.disclosure_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    investor_category investor_category_enum NOT NULL,
+    investor_name character varying(255) COLLATE pg_catalog."default",
+    investor_country character varying(100) COLLATE pg_catalog."default",
+    transaction_type transaction_type_enum NOT NULL,
+    transaction_mode transaction_mode_enum,
+    shares_transacted bigint,
+    price_per_share numeric(18,4),
+    transaction_value numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    stake_before numeric(8,4),
+    stake_after numeric(8,4),
+    stake_change numeric(8,4) GENERATED ALWAYS AS ((stake_after - stake_before)) STORED,
+    transaction_date date,
+    exchange character varying(10) COLLATE pg_catalog."default",
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT disclosure_details_pkey PRIMARY KEY (id),
+    CONSTRAINT disclosure_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT disclosure_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.financial_result_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.financial_result_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    period_quarter character varying(5) COLLATE pg_catalog."default",
+    period_year integer,
+    revenue numeric(18,2),
+    revenue_yoy_pct numeric(8,2),
+    ebitda numeric(18,2),
+    ebitda_margin numeric(8,2),
+    pat numeric(18,2),
+    pat_yoy_pct numeric(8,2),
+    eps numeric(10,4),
+    beat_miss beat_miss_enum,
+    guidance_revenue character varying(100) COLLATE pg_catalog."default",
+    guidance_margin character varying(100) COLLATE pg_catalog."default",
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    key_highlight text COLLATE pg_catalog."default",
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT financial_result_details_pkey PRIMARY KEY (id),
+    CONSTRAINT financial_result_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT financial_result_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.fundraising_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.fundraising_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    issue_size numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    price_per_share numeric(18,4),
+    number_of_shares bigint,
+    allottee_name character varying(255) COLLATE pg_catalog."default",
+    allottee_category character varying(50) COLLATE pg_catalog."default",
+    coupon_rate numeric(6,2),
+    maturity_date date,
+    tenure_years numeric(5,1),
+    purpose text COLLATE pg_catalog."default",
+    open_date date,
+    close_date date,
+    subscription_times numeric(8,2),
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT fundraising_details_pkey PRIMARY KEY (id),
+    CONSTRAINT fundraising_details_event_id_key UNIQUE (event_id),
+        CONSTRAINT fundraising_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.governance_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.governance_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    person_name character varying(255) COLLATE pg_catalog."default",
+    designation character varying(100) COLLATE pg_catalog."default",
+    change_type character varying(30) COLLATE pg_catalog."default",
+    effective_date date,
+    reason text COLLATE pg_catalog."default",
+    regulator character varying(50) COLLATE pg_catalog."default",
+    action_type character varying(100) COLLATE pg_catalog."default",
+    penalty_amount numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    meeting_date date,
+    agenda_summary text COLLATE pg_catalog."default",
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT governance_details_pkey PRIMARY KEY (id),
+    CONSTRAINT governance_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT governance_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.insider_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.insider_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    person_name character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    designation character varying(100) COLLATE pg_catalog."default",
+    relationship character varying(100) COLLATE pg_catalog."default",
+    transaction_type transaction_type_enum NOT NULL,
+    shares_transacted bigint,
+    price_per_share numeric(18,4),
+    transaction_value numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    stake_before numeric(8,4),
+    stake_after numeric(8,4),
+    pledge_percentage numeric(8,4),
+    sebi_disclosure_date date,
+    transaction_date date,
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT insider_details_pkey PRIMARY KEY (id),
+    CONSTRAINT insider_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT insider_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+CREATE TABLE IF NOT EXISTS stoxscoop_dev.legal_details
+(
+    id integer NOT NULL DEFAULT nextval('stoxscoop.legal_details_id_seq'::regclass),
+    event_id integer NOT NULL,
+    forum character varying(100) COLLATE pg_catalog."default",
+    case_number character varying(100) COLLATE pg_catalog."default",
+    counterparty character varying(255) COLLATE pg_catalog."default",
+    demand_amount numeric(18,2),
+    penalty_amount numeric(18,2),
+    currency character varying(3) COLLATE pg_catalog."default" DEFAULT 'INR'::character varying,
+    company_stance character varying(20) COLLATE pg_catalog."default",
+    outcome outcome_enum DEFAULT 'pending'::outcome_enum,
+    order_date date,
+    next_hearing_date date,
+    contingent_liability boolean DEFAULT false,
+    description text COLLATE pg_catalog."default",
+    CONSTRAINT legal_details_pkey PRIMARY KEY (id),
+    CONSTRAINT legal_details_event_id_key UNIQUE (event_id),
+    CONSTRAINT legal_details_event_id_fkey FOREIGN KEY (event_id)
+        REFERENCES stoxscoop_dev.events (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+
+CREATE TABLE IF NOT EXISTS classification.ticker_symbol
+(
+    trading_symbol character varying COLLATE pg_catalog."default",
+    exchange character varying COLLATE pg_catalog."default",
+    name character varying COLLATE pg_catalog."default",
+    instrument_type character varying COLLATE pg_catalog."default",
+    instrument_key character varying COLLATE pg_catalog."default",
+    short_name character varying COLLATE pg_catalog."default",
+    security_type character varying COLLATE pg_catalog."default",
+    yfinance_ticker character varying COLLATE pg_catalog."default",
+    created_on timestamp without time zone DEFAULT (now() AT TIME ZONE 'Asia/Kolkata'::text),
+    created_by character varying COLLATE pg_catalog."default",
+    updated_at timestamp without time zone,
+    updated_by character varying COLLATE pg_catalog."default",
+    derivate_stock boolean,
+    id integer NOT NULL DEFAULT nextval('classification.ticker_symbol_id_seq'::regclass),
+    inactive_reason character varying(50) COLLATE pg_catalog."default",
+    is_active boolean,
+    instrument_code text COLLATE pg_catalog."default",
+    is_screener_active boolean NOT NULL DEFAULT false,
+    CONSTRAINT ticker_symbol_pkey PRIMARY KEY (id),
+    CONSTRAINT uq_instrument_code UNIQUE (instrument_code)
+)

@@ -1,0 +1,67 @@
+"id","event_type","subtype_code","label","description","default_signal","created_at","updated_at"
+1,"corporate_action","dividend","Dividend","Cash payout to shareholders from profits","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+2,"corporate_action","bonus","Bonus issue","Free shares issued proportionally to existing holders","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+3,"corporate_action","split","Stock split","Share face value reduced, total count increases","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+4,"corporate_action","rights_issue","Rights issue","New shares offered to existing holders at a discount","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+5,"corporate_action","buyback","Buyback","Company repurchases its own shares from the market","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+6,"corporate_action","merger","Merger","Company merges with another entity","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+7,"corporate_action","demerger","Demerger","Business unit spun off as a separate listed entity","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+8,"corporate_action","open_offer","Open offer","Public offer to acquire shares from minority holders","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+9,"disclosure","bulk_deal","Bulk deal","Trade > 0.5% of equity in a single exchange session","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+10,"disclosure","block_deal","Block deal","Large off-market negotiated trade between institutions","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+11,"disclosure","shareholding_change","Shareholding change","Quarterly shareholding pattern update filed with exchange","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+16,"disclosure","superinvestor_buy","Superinvestor buy","Notable investor discloses purchase","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+17,"disclosure","superinvestor_sell","Superinvestor sell","Notable investor discloses sale","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+18,"disclosure","mutual_fund_change","Mutual fund change","Mutual fund increases or reduces holding","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+19,"insider","insider_buy","Insider buy","Director / KMP buys shares in open market","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+20,"insider","insider_sell","Insider sell","Director / KMP sells shares in open market","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+21,"insider","pledge","Pledge","Promoter pledges shares as collateral for a loan","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+22,"insider","pledge_release","Pledge release","Promoter releases previously pledged shares","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+23,"insider","acquisition","Acquisition","Promoter acquires additional stake","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+24,"insider","esop_exercise","ESOP exercise","Employee stock options exercised by management","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+26,"business","contract","Contract","New client or supplier contract signed","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+27,"business","order_win","Order win","New order received from a customer","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+28,"business","capex","Capex","Capital expenditure announced for new assets or capacity","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+29,"business","jv_partnership","JV / partnership","Joint venture or strategic partnership formed","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+30,"business","new_product","New product","New product or service launched or announced","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+31,"business","expansion","Expansion","Geographic or manufacturing capacity expansion announced","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+32,"business","plant_commissioning","Plant commissioning","New manufacturing plant or facility goes live","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+33,"business","divestiture","Divestiture","Non-core business unit or asset sold or divested","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+34,"governance","board_appointment","Board appointment","New director or executive appointed to the board","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+35,"governance","board_resignation","Board resignation","Director or executive resigns from the board","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+36,"governance","auditor_appointment","Auditor appointment","New statutory auditor appointed by shareholders","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+37,"governance","auditor_resignation","Auditor resignation","Statutory auditor resigns — high-signal red flag","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+38,"governance","sebi_action","SEBI action","SEBI issues show-cause, penalty or trading restriction","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+39,"governance","regulatory_notice","Regulatory notice","Notice received from MCA, RBI, IRDAI or other regulator","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+40,"governance","agm","AGM","Annual general meeting held or scheduled","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+41,"governance","egm","EGM","Extraordinary general meeting held or scheduled","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+43,"credit_rating","upgrade","Rating upgrade","Credit rating improved by the rating agency","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+44,"credit_rating","downgrade","Rating downgrade","Credit rating reduced by the rating agency","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+45,"credit_rating","watch_positive","Watch positive","Rating placed on positive credit watch","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+46,"credit_rating","watch_negative","Watch negative","Rating placed on negative credit watch","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+47,"credit_rating","affirmed","Rating affirmed","Rating confirmed without change by agency","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+48,"credit_rating","withdrawn","Rating withdrawn","Rating withdrawn — issuer request or non-cooperation","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+49,"financials","quarterly_results","Quarterly results","Q1/Q2/Q3/Q4 earnings release","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+50,"financials","annual_results","Annual results","Full year audited earnings release","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+51,"financials","provisional_numbers","Provisional numbers","Unaudited early revenue or profit estimate","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+52,"financials","restatement","Restatement","Prior period results restated — accounting red flag","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+53,"financials","guidance_upgrade","Guidance upgrade","Management raises revenue or margin guidance","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+54,"financials","guidance_downgrade","Guidance downgrade","Management lowers revenue or margin guidance","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+55,"financials","guidance_maintained","Guidance maintained","Management confirms guidance unchanged at results","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+56,"fundraising","qip","QIP","Qualified institutional placement to institutions","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+57,"fundraising","preferential_allotment","Preferential allotment","Shares allotted to specific named investors","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+58,"fundraising","ncd","NCD","Non-convertible debenture issued","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+59,"fundraising","bond","Bond","Secured or unsecured bond issuance","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+60,"fundraising","ipo","IPO","Initial public offering","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+61,"fundraising","fpo","FPO","Follow-on public offering by existing listed company","mixed","2026-03-22 09:32:23.288161+05:30",NULL
+63,"fundraising","private_placement","Private placement","Off-market capital raise from select investors","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+64,"fundraising","debt_repayment","Debt repayment","Loan or bond repaid ahead of or at scheduled maturity","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+65,"legal","court_order","Court order","Order from High Court or Supreme Court","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+66,"legal","arbitration","Arbitration","Arbitration proceeding initiated, ongoing, or decided","neutral","2026-03-22 09:32:23.288161+05:30",NULL
+67,"legal","tax_demand","Tax demand","Income tax or GST demand raised against the company","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+68,"legal","ibc_filing","IBC filing","Insolvency petition filed under IBC at NCLT","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+69,"legal","penalty","Penalty","Regulatory or court penalty imposed on the company","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+70,"legal","notice","Notice","Show cause or legal notice received","bearish","2026-03-22 09:32:23.288161+05:30",NULL
+71,"legal","settlement","Settlement","Legal or regulatory dispute settled out of court","bullish","2026-03-22 09:32:23.288161+05:30",NULL
+72,"corporate_action","acquisition","Acquisition","Company acquiring stake or entity","neutral","2026-03-25 23:40:35.252348+05:30",NULL
+73,"business","sales_initiative","Sales initiative","Company launches a structured sales push, campaign, channel expansion or GTM strategy","bullish","2026-04-01 18:14:58.15676+05:30",NULL

@@ -78,20 +78,25 @@ class DB_Writer:
     # Public mapping
     # ------------------------------------------------------------------
 
-    async def write_batch(self, records: list[OutputRecord]) -> tuple[int, int]:
+    async def write_batch(self, records: list[OutputRecord]) -> tuple[int, int, dict[str, int]]:
         """
         Insert a batch of OutputRecord objects into news_staging.
-        Returns (inserted_count, skipped_count).
+        Returns (inserted_count, skipped_count, url_to_staging_id).
+
+        url_to_staging_id maps url → news_staging.id for inserted rows only.
+        Skipped/duplicate rows are absent from the map.
         """
         sql = (
             f"INSERT INTO {self.schema}.news_staging"
             " (url, source, title, published_date, content, extracted_stocks, is_loaded)"
             " VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)"
             " ON CONFLICT (url) DO NOTHING"
+            " RETURNING id"
         )
 
         inserted = 0
         skipped = 0
+        url_to_staging_id: dict[str, int] = {}
 
         for record in records:
             row = self.map_record(record)
@@ -108,7 +113,7 @@ class DB_Writer:
                 try:
                     async with self.pool.acquire() as conn:
                         async with conn.transaction():
-                            status = await conn.execute(
+                            result_row = await conn.fetchrow(
                                 sql,
                                 url,
                                 source,
@@ -118,13 +123,13 @@ class DB_Writer:
                                 extracted_stocks,
                                 is_loaded,
                             )
-                    # status string is like "INSERT 0 1" (inserted) or "INSERT 0 0" (skipped)
-                    count = int(status.split()[-1])
-                    if count == 0:
+                    if result_row is None:
+                        # ON CONFLICT DO NOTHING — duplicate
                         logger.info("Skipped duplicate URL: %s", url)
                         skipped += 1
                     else:
                         inserted += 1
+                        url_to_staging_id[url] = result_row["id"]
                     last_exc = None
                     break  # success — exit retry loop
                 except (asyncpg.PostgresConnectionError, asyncpg.TooManyConnectionsError) as exc:
@@ -141,7 +146,7 @@ class DB_Writer:
                 logger.error("Failed to insert record for URL %s: %s", url, last_exc)
 
         logger.info("Batch complete: %d inserted, %d skipped.", inserted, skipped)
-        return (inserted, skipped)
+        return (inserted, skipped, url_to_staging_id)
 
     def map_record(self, record: OutputRecord) -> dict:
         """Map an OutputRecord to a dict matching the news_staging schema.

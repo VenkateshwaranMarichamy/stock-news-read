@@ -12,7 +12,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 
 from app.db.pool import close_pool, create_pool
-from app.routers import health, news, scrape
+from app.routers import health, news, scrape, classify
 from moneycontrol_scraper.config import load_config
 
 # Load config once at module level — shared by all routers via app.state
@@ -29,9 +29,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if config.output_mode in {"database", "both"} and config.database is not None:
         app.state.pool = await create_pool(config.database)
         app.state.schema = config.database.schema
+
+        # Load valid_subtypes for Event_Classifier from event_subtypes table
+        try:
+            async with app.state.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    f"SELECT event_type, subtype_code FROM {app.state.schema}.event_subtypes"
+                )
+            valid_subtypes: dict[str, set[str]] = {}
+            for row in rows:
+                et = row["event_type"]
+                code = row["subtype_code"]
+                valid_subtypes.setdefault(et, set()).add(code)
+            app.state.valid_subtypes = valid_subtypes
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to load valid_subtypes from DB: %s — pipeline will use empty subtypes",
+                exc,
+            )
+            app.state.valid_subtypes = {}
     else:
         app.state.pool = None
         app.state.schema = None
+        app.state.valid_subtypes = None
 
     yield
 
@@ -51,3 +72,4 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(scrape.router)
 app.include_router(news.router)
+app.include_router(classify.router)

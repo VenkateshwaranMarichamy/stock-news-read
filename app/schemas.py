@@ -60,12 +60,14 @@ class ScrapeResponse(BaseModel):
 
     Requirement 6.3: includes processed, inserted, skipped counts and a
     failures list of {"url": ..., "reason": ...} dicts.
+    Requirement 7.3: events_queued is the total stock entries submitted to pipeline.
     """
 
     processed: int
     inserted: int
     skipped: int
     failures: list[dict]  # each entry: {"url": str, "reason": str}
+    events_queued: int = 0  # total stock entries submitted to pipeline; 0 for file mode
 
 
 class NewsListResponse(BaseModel):
@@ -79,3 +81,52 @@ class NewsListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ClassifyRequest(BaseModel):
+    """
+    Request body for POST /classify.
+
+    Requirements 1.1, 1.2, 1.3, 1.4:
+    - ids is a list of positive integers.
+    - At least one ID is required (non-empty list).
+    - At most 50 IDs are allowed per request.
+    - All IDs must be positive integers (> 0).
+    """
+
+    ids: list[int]
+
+    @field_validator("ids", mode="after")
+    @classmethod
+    def validate_ids(cls, v: list[int]) -> list[int]:
+        if len(v) == 0:
+            raise ValueError("At least one ID is required.")
+        if len(v) > 50:
+            raise ValueError("At most 50 IDs are allowed per request.")
+        for val in v:
+            if val <= 0:
+                raise ValueError("All IDs must be positive integers.")
+        return v
+
+
+class ClassifyResponse(BaseModel):
+    """
+    Response body for POST /classify.
+
+    Requirements 6.1, 6.2:
+    - ids_processed: IDs found in news_staging with at least one stock entry.
+    - ids_missing: IDs not found in news_staging.
+    - ids_skipped: IDs with null/empty content, or pipeline/start_batch failure.
+    - total_stocks: sum of PipelineSummary.total across all runs.
+    - events_inserted: sum of PipelineSummary.db_inserted.
+    - events_failed: sum of PipelineSummary.db_failures.
+    - unresolved_stocks: sum of PipelineSummary.unresolved.
+    """
+
+    ids_processed: list[int] = []
+    ids_missing: list[int] = []
+    ids_skipped: list[int] = []
+    total_stocks: int = 0
+    events_inserted: int = 0
+    events_failed: int = 0
+    unresolved_stocks: int = 0
