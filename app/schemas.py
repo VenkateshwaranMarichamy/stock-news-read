@@ -68,6 +68,7 @@ class ScrapeResponse(BaseModel):
     skipped: int
     failures: list[dict]  # each entry: {"url": str, "reason": str}
     events_queued: int = 0  # total stock entries submitted to pipeline; 0 for file mode
+    staging_ids: list[int] = []  # news_staging IDs for each processed record (use with POST /classify)
 
 
 class NewsListResponse(BaseModel):

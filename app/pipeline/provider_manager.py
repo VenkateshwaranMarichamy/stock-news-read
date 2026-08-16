@@ -285,8 +285,9 @@ class LLM_Provider_Manager:
             for runtime in self._providers:
                 if runtime.state == ProviderState.AVAILABLE:
                     config = runtime.config
-                    logger.debug(
-                        "Using provider '%s' model '%s'", config.name, config.model
+                    logger.info(
+                        "PROVIDER_SELECTED strategy=priority provider=%s model=%s",
+                        config.name, config.model,
                     )
                     return config
         elif self._strategy == "round-robin":
@@ -297,8 +298,9 @@ class LLM_Provider_Manager:
                 if runtime.state == ProviderState.AVAILABLE:
                     self._rr_index = (idx + 1) % n
                     config = runtime.config
-                    logger.debug(
-                        "Using provider '%s' model '%s'", config.name, config.model
+                    logger.info(
+                        "PROVIDER_SELECTED strategy=round-robin provider=%s model=%s",
+                        config.name, config.model,
                     )
                     return config
 

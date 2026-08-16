@@ -82,6 +82,7 @@ async def scrape(request: ScrapeRequest, req: Request) -> ScrapeResponse:
     inserted = 0
     skipped = 0
     events_queued = 0
+    staging_ids: list[int] = []
 
     output_mode = config.output_mode
 
@@ -101,6 +102,9 @@ async def scrape(request: ScrapeRequest, req: Request) -> ScrapeResponse:
     if output_mode in {"database", "both"} and records and pool is not None:
         writer = DB_Writer(pool, schema)
         inserted, skipped, url_to_staging_id = await writer.write_batch(records)
+
+        # Collect all staging IDs (newly inserted + already existing)
+        staging_ids = [sid for sid in url_to_staging_id.values() if sid is not None]
 
         # --- Pipeline integration -------------------------------------------
         # Run for all records that have stock entries, not just newly inserted ones.
@@ -131,6 +135,9 @@ async def scrape(request: ScrapeRequest, req: Request) -> ScrapeResponse:
                             )
                         if row:
                             staging_id = row["id"]
+                            # Add to staging_ids if not already present
+                            if staging_id not in staging_ids:
+                                staging_ids.append(staging_id)
                             # Skip if already fully classified
                             if row["classification_status"] == "complete":
                                 logger.info(
@@ -200,4 +207,5 @@ async def scrape(request: ScrapeRequest, req: Request) -> ScrapeResponse:
         skipped=skipped,
         failures=failures,
         events_queued=events_queued,
+        staging_ids=staging_ids,
     )

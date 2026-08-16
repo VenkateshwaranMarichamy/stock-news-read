@@ -442,7 +442,12 @@ News: {news_text}"""
                     confidence_model_version=None,
                 )
 
-            return self._process_response(data, stock_name, provider.model)
+            result = self._process_response(data, stock_name, provider.model)
+            logger.info(
+                "CLASSIFY_OK provider=%s model=%s stock=%r status=%s",
+                provider.name, provider.model, stock_name, result.status,
+            )
+            return result
 
         # Fallback loop exhausted without a result — all providers unavailable
         return ClassificationResult(

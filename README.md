@@ -258,3 +258,239 @@ The suite has **109 tests** covering:
 | Empty `sections: {}` in output | The page structure may have changed. Check the URL is a valid "Stocks to Watch" article. |
 | `ScraperFetchError: URL ... returned status 403` | MoneyControl may be rate-limiting. Increase `delay` in `config.yaml`. |
 | Output file not created | Check the `output_dir` path in `config.yaml` is writable. |
+
+
+---
+
+## API Server (FastAPI)
+
+In addition to the CLI scraper, the project includes a full REST API that scrapes, stores, and classifies stock news using an LLM pipeline.
+
+### Start the server
+
+```bash
+source .venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8005
+```
+
+Interactive docs: `http://localhost:8005/docs`
+
+### Environment variables (`.env`)
+
+```dotenv
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=stk_fund
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_SCHEMA=stoxscoop_dev
+
+# Multi-provider LLM fallback keys (used when llm_providers is set in config.yaml)
+GEMINI_API_KEY=your_free_key_1
+GEMINI_API_KEY_2=your_free_key_2
+GEMINI_API_KEY_3=your_free_key_3
+GEMINI_API_KEY_PAID=your_paid_key
+```
+
+---
+
+## API Endpoints
+
+### `GET /health`
+Returns `{"status": "ok"}` when server and DB are up. Returns `503` if DB is unreachable.
+
+---
+
+### `POST /scrape`
+Scrapes one or more MoneyControl article URLs, saves to DB, and queues LLM classification in the background.
+
+**Request:**
+```json
+{ "urls": ["https://www.moneycontrol.com/news/..."] }
+```
+
+**Response:**
+```json
+{
+  "processed": 1,
+  "inserted": 1,
+  "skipped": 0,
+  "failures": [],
+  "events_queued": 8,
+  "staging_ids": [42]
+}
+```
+
+| Field | Description |
+|---|---|
+| `processed` | URLs attempted |
+| `inserted` | New articles added to DB |
+| `skipped` | Duplicates already in DB |
+| `failures` | URLs that failed to fetch/parse |
+| `events_queued` | Stock entries sent to LLM pipeline |
+| `staging_ids` | DB IDs of stored records — use with `/classify` or `/news/{id}` |
+
+---
+
+### `POST /classify`
+Manually re-run LLM classification for specific records by DB ID. Useful for retrying failures.
+
+**Request:**
+```json
+{ "ids": [42, 43] }
+```
+
+**Response:**
+```json
+{
+  "ids_processed": [42, 43],
+  "ids_missing": [],
+  "ids_skipped": [],
+  "total_stocks": 16,
+  "events_inserted": 15,
+  "events_failed": 1,
+  "unresolved_stocks": 0
+}
+```
+
+---
+
+### `GET /news`
+List news records with optional filters.
+
+| Query param | Example | Description |
+|---|---|---|
+| `date` | `2026-05-31` | Filter by published date |
+| `stock` | `Infosys` | Filter by stock name |
+| `page` | `1` | Page number |
+| `page_size` | `20` | Results per page (max 100) |
+
+```bash
+curl "http://localhost:8005/news?date=2026-05-31&page=1"
+```
+
+---
+
+### `GET /news/{id}` and `GET /news/by-url`
+Fetch a single record by its DB ID or exact article URL.
+
+```bash
+curl http://localhost:8005/news/42
+curl "http://localhost:8005/news/by-url?url=https://www.moneycontrol.com/news/..."
+```
+
+---
+
+## Multi-Provider LLM Fallback
+
+The classification pipeline supports multiple Gemini API keys. When one key hits its daily quota, the system automatically falls back to the next key without dropping any stock entries.
+
+### How it works
+
+```
+classify(stock_entry)
+  → Try gemini-key1 (free tier)  →  success → done
+                                 →  quota hit → mark exhausted, try next
+  → Try gemini-key2 (free tier)  →  success → done
+                                 →  quota hit → mark exhausted, try next
+  → Try gemini-key3 (free tier)  →  success → done
+  → Try gemini-paid  (billing)   →  success → done  (no daily cap)
+                                 →  all failed → status="failed"
+```
+
+### Configure in `config.yaml`
+
+```yaml
+llm_rotation_strategy: "priority"   # always try lowest-index available key first
+
+llm_providers:
+  - name: "gemini-key1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-key2"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_2"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-key3"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_3"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-paid"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_PAID"
+    model: "gemini-2.5-flash-lite"
+```
+
+---
+
+## LLM Provider Metrics via Logs
+
+Every classification emits structured INFO-level log lines you can use for metrics.
+
+**Log format:**
+
+```
+INFO  PROVIDER_SELECTED strategy=priority provider=gemini-key1 model=gemini-2.5-flash-lite
+INFO  CLASSIFY_OK provider=gemini-key1 model=gemini-2.5-flash-lite stock='Infosys' status=ok
+
+# On quota hit:
+WARNING  Provider 'gemini-key1' marked as quota_exhausted
+INFO     PROVIDER_SELECTED strategy=priority provider=gemini-key2 model=gemini-2.5-flash-lite
+```
+
+**Useful grep commands for metrics:**
+
+```bash
+# Count classifications per provider
+grep "CLASSIFY_OK" app.log | grep -o "provider=[^ ]*" | sort | uniq -c
+
+# Count provider selections (includes retries)
+grep "PROVIDER_SELECTED" app.log | grep -o "provider=[^ ]*" | sort | uniq -c
+
+# List all quota exhaustion events
+grep "quota_exhausted" app.log
+
+# List all fallback events (any key switch)
+grep "rate_limited\|quota_exhausted" app.log
+
+# Check classification success vs failure rate
+grep "CLASSIFY_OK" app.log | grep -o "status=[^ ]*" | sort | uniq -c
+```
+
+---
+
+## Updated Project Structure
+
+```
+stock-news-read/
+├── app/
+│   ├── main.py                      ← FastAPI app + DB pool lifecycle
+│   ├── schemas.py                   ← Request/response Pydantic models
+│   ├── routers/
+│   │   ├── health.py                ← GET /health
+│   │   ├── scrape.py                ← POST /scrape
+│   │   ├── classify.py              ← POST /classify
+│   │   └── news.py                  ← GET /news, /news/{id}, /news/by-url
+│   ├── pipeline/
+│   │   ├── provider_manager.py      ← Multi-key LLM fallback manager
+│   │   ├── classifier.py            ← LLM event classifier (uses provider_manager)
+│   │   ├── resolver.py              ← Stock name → ticker resolver
+│   │   ├── event_writer.py          ← Write classified events to DB
+│   │   └── orchestrator.py          ← Pipeline coordinator
+│   └── db/
+│       ├── pool.py                  ← asyncpg connection pool
+│       ├── writer.py                ← Write scraped articles to news_staging
+│       └── queries.py               ← Read queries for /news endpoints
+├── moneycontrol_scraper/            ← CLI scraper (HTTP fetch + HTML parse)
+├── tests/                           ← Test suite (94+ tests)
+├── config.yaml                      ← Main config (URLs, sections, LLM providers)
+├── .env                             ← Secrets — never commit
+├── run.py                           ← CLI entry point
+├── HANDBOOK.md                      ← Detailed operations guide
+└── README.md                        ← This file
+```
