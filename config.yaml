@@ -49,3 +49,36 @@ output_dir: "output"
 # Increase this if you see rate-limiting errors from MoneyControl.
 # ---------------------------------------------------------------------------
 delay: 1.0
+
+# ---------------------------------------------------------------------------
+# llm_providers: List of LLM providers for classification (multi-provider fallback).
+# The system tries providers in order (priority strategy) or cycles through them
+# (round-robin strategy). When a provider hits its quota or rate limit, the next
+# available provider is used automatically.
+#
+# Each entry requires: name, base_url, model
+# api_key can be a literal value or a $ENV_VAR_NAME reference.
+# weight is optional (default: 1), reserved for future weighted strategies.
+# ---------------------------------------------------------------------------
+llm_rotation_strategy: "priority"   # or "round-robin"
+
+llm_providers:
+  - name: "gemini-key1"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-key2"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_2"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-key3"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_3"
+    model: "gemini-2.5-flash-lite"
+
+  - name: "gemini-paid"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "$GEMINI_API_KEY_PAID"
+    model: "gemini-2.5-flash-lite"

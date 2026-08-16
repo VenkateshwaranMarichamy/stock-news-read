@@ -128,22 +128,57 @@ DETAIL_FIELDS: dict[str, list[str]] = {
 }
 
 
-_RETRY_DELAY_RE = _re.compile(r"retry[^\d]*(\d+(?:\.\d+)?)\s*s", _re.IGNORECASE)
+# Re-export shim: _RETRY_DELAY_RE and _parse_retry_delay have moved to provider_manager.py.
+# These names are kept here so that any existing imports or tests that reference
+# classifier._parse_retry_delay / classifier._RETRY_DELAY_RE continue to work unchanged.
+from app.pipeline.provider_manager import (  # noqa: E402
+    ConfigurationError,
+    LLM_Provider_Manager,
+    ProviderConfig,
+    _RETRY_DELAY_RE,
+    _parse_retry_delay as _parse_retry_delay_impl,
+)
 
 
 def _parse_retry_delay(error_text: str, default: float = 60.0) -> float:
-    """Extract the retry delay in seconds from a 429 error message.
+    """Shim: delegates to provider_manager._parse_retry_delay.
 
-    Gemini error format: "Please retry in 36.310724774s"
-    Falls back to `default` if no delay found.
+    The canonical implementation lives in provider_manager.py.
+    This wrapper preserves the original signature (with `default`) for
+    backward compatibility with any existing callers or tests.
     """
-    m = _RETRY_DELAY_RE.search(error_text)
-    if m:
-        try:
-            return float(m.group(1)) + 1.0  # add 1s buffer
-        except ValueError:
-            pass
-    return default
+    result = _parse_retry_delay_impl(error_text)
+    return result if result is not None else default
+
+
+def _make_default_provider_manager() -> LLM_Provider_Manager:
+    """Build a single-provider LLM_Provider_Manager from environment variables.
+
+    Reads LLM_BASE_URL, LLM_API_KEY, and LLM_MODEL from the environment.
+    Raises ConfigurationError if any variable is absent or empty.
+
+    Requirements: 1.3, 5.2
+    """
+    llm_base_url = os.environ.get("LLM_BASE_URL", "")
+    llm_api_key = os.environ.get("LLM_API_KEY", "")
+    llm_model = os.environ.get("LLM_MODEL", "")
+
+    if not llm_base_url or not llm_api_key or not llm_model:
+        raise ConfigurationError(
+            "LLM_BASE_URL, LLM_API_KEY, and LLM_MODEL environment variables must be set"
+        )
+
+    return LLM_Provider_Manager(
+        providers=[
+            ProviderConfig(
+                name="default",
+                base_url=llm_base_url,
+                api_key=llm_api_key,
+                model=llm_model,
+            )
+        ],
+        strategy="priority",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -153,12 +188,18 @@ def _parse_retry_delay(error_text: str, default: float = 60.0) -> float:
 class Event_Classifier:
     """Classifies stock news text into structured event records using an LLM."""
 
-    def __init__(self, valid_subtypes: dict[str, set[str]]) -> None:
+    def __init__(self, valid_subtypes: dict[str, set[str]], provider_manager: LLM_Provider_Manager | None = None) -> None:
         """
         Args:
             valid_subtypes: {event_type: {subtype_code, ...}} loaded from event_subtypes table.
+            provider_manager: Optional LLM provider manager. When None, builds a default
+                              single-provider manager from LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+                              environment variables (backward-compatible behaviour).
         """
         self._valid_subtypes = valid_subtypes
+        if provider_manager is None:
+            provider_manager = _make_default_provider_manager()
+        self._provider_manager = provider_manager
 
     # ------------------------------------------------------------------
     # Pure helpers (testable without LLM)
@@ -288,17 +329,14 @@ News: {news_text}"""
     ) -> ClassificationResult:
         """Classify a stock news entry using the LLM.
 
-        Retries up to 2 additional times (3 total) on network/timeout errors.
+        Uses the provider fallback loop: tries each available provider in turn.
+        Within each provider, retries up to 2 additional times (3 total) on network/timeout errors.
+        On RateLimitError: records the error with the manager and falls back to the next provider.
         Invalid JSON → status="failed" immediately, no retry.
         Invalid (event_type, event_subtype) pair → status="unclassified".
         """
         import openai  # imported here to avoid hard dependency at module load
 
-        llm_base_url = os.environ.get("LLM_BASE_URL", "")
-        llm_api_key = os.environ.get("LLM_API_KEY", "")
-        llm_model = os.environ.get("LLM_MODEL", "")
-
-        client = openai.AsyncOpenAI(base_url=llm_base_url, api_key=llm_api_key)
         prompt = self._build_prompt(news_text, section_name, stock_name)
 
         # Split prompt into system and user parts
@@ -311,38 +349,91 @@ News: {news_text}"""
             {"role": "user", "content": user_content},
         ]
 
-        last_error: Exception | None = None
-        for attempt in range(3):
-            try:
-                response = await asyncio.wait_for(
-                    client.chat.completions.create(
-                        model=llm_model,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                    ),
-                    timeout=30.0,
+        num_providers = len(self._provider_manager.get_provider_configs())
+
+        for _fallback in range(num_providers + 1):
+            provider = self._provider_manager.get_available_provider()
+            if provider is None:
+                return ClassificationResult(
+                    status="failed",
+                    event_type=None, event_subtype=None, signal_type=None,
+                    sentiment=None, priority=None, title=None, summary=None,
+                    event_date=None, confidence_score=None,
+                    confidence_model_version=None,
+                    details={"reason": "all_providers_exhausted"},
+                    tags=[],
+                    signal_reason=None,
                 )
-                raw_text = response.choices[0].message.content or ""
-                break  # success
-            except (openai.APIConnectionError, openai.APITimeoutError, asyncio.TimeoutError) as exc:
-                last_error = exc
-                if attempt < 2:
-                    await asyncio.sleep(2)
-                continue
-            except openai.RateLimitError as exc:
-                last_error = exc
-                if attempt < 2:
-                    # Parse retry delay from error message: "Please retry in 36.3s"
-                    retry_delay = _parse_retry_delay(str(exc), default=60.0)
-                    logger.warning(
-                        "Rate limit hit for '%s', waiting %.1fs before retry %d/2",
-                        stock_name, retry_delay, attempt + 1,
+
+            client = openai.AsyncOpenAI(base_url=provider.base_url, api_key=provider.api_key)
+
+            last_error: Exception | None = None
+            rate_limited_this_provider = False
+            raw_text: str | None = None
+
+            for attempt in range(3):
+                try:
+                    response = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=provider.model,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                        ),
+                        timeout=30.0,
                     )
-                    await asyncio.sleep(retry_delay)
+                    raw_text = response.choices[0].message.content or ""
+                    break  # success — exit inner retry loop
+                except (openai.APIConnectionError, openai.APITimeoutError, asyncio.TimeoutError) as exc:
+                    last_error = exc
+                    if attempt < 2:
+                        await asyncio.sleep(2)
+                    continue
+                except openai.RateLimitError as exc:
+                    last_error = exc
+                    # Record the error and break to try the next provider
+                    self._provider_manager.record_rate_limit_error(provider.name, str(exc))
+                    rate_limited_this_provider = True
+                    break  # break inner loop → continue outer fallback loop
+                except Exception as exc:
+                    # Non-retryable error
+                    logger.error("LLM failed for '%s': %s", stock_name, exc)
+                    return ClassificationResult(
+                        status="failed",
+                        event_type=None, event_subtype=None, signal_type=None,
+                        sentiment=None, priority=None, title=None, summary=None,
+                        event_date=None, confidence_score=None,
+                        confidence_model_version=None,
+                    )
+            else:
+                # All 3 attempts failed (network/timeout errors only)
+                if isinstance(last_error, openai.RateLimitError):
+                    # Shouldn't reach here (RateLimitError breaks before else), but guard anyway
+                    self._provider_manager.record_rate_limit_error(provider.name, str(last_error))
+                    rate_limited_this_provider = True
+                else:
+                    logger.error("LLM failed for '%s': %s", stock_name, last_error)
+                    return ClassificationResult(
+                        status="failed",
+                        event_type=None, event_subtype=None, signal_type=None,
+                        sentiment=None, priority=None, title=None, summary=None,
+                        event_date=None, confidence_score=None,
+                        confidence_model_version=None,
+                    )
+
+            # If this provider was rate-limited, continue to next fallback iteration
+            if rate_limited_this_provider:
                 continue
-            except Exception as exc:
-                # Non-retryable error
-                logger.error("LLM failed for '%s': %s", stock_name, exc)
+
+            # raw_text must be set at this point (successful response)
+            if raw_text is None:
+                # Defensive: should not happen if loop logic is correct
+                continue
+
+            # Parse JSON
+            try:
+                data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                logger.error("LLM returned invalid JSON for '%s': %s", stock_name, raw_text)
                 return ClassificationResult(
                     status="failed",
                     event_type=None, event_subtype=None, signal_type=None,
@@ -350,31 +441,20 @@ News: {news_text}"""
                     event_date=None, confidence_score=None,
                     confidence_model_version=None,
                 )
-        else:
-            # All 3 attempts failed
-            logger.error("LLM failed for '%s': %s", stock_name, last_error)
-            return ClassificationResult(
-                status="failed",
-                event_type=None, event_subtype=None, signal_type=None,
-                sentiment=None, priority=None, title=None, summary=None,
-                event_date=None, confidence_score=None,
-                confidence_model_version=None,
-            )
 
-        # Parse JSON
-        try:
-            data = json.loads(raw_text)
-        except json.JSONDecodeError:
-            logger.error("LLM returned invalid JSON for '%s': %s", stock_name, raw_text)
-            return ClassificationResult(
-                status="failed",
-                event_type=None, event_subtype=None, signal_type=None,
-                sentiment=None, priority=None, title=None, summary=None,
-                event_date=None, confidence_score=None,
-                confidence_model_version=None,
-            )
+            return self._process_response(data, stock_name, provider.model)
 
-        return self._process_response(data, stock_name, llm_model)
+        # Fallback loop exhausted without a result — all providers unavailable
+        return ClassificationResult(
+            status="failed",
+            event_type=None, event_subtype=None, signal_type=None,
+            sentiment=None, priority=None, title=None, summary=None,
+            event_date=None, confidence_score=None,
+            confidence_model_version=None,
+            details={"reason": "all_providers_exhausted"},
+            tags=[],
+            signal_reason=None,
+        )
 
     def _process_response(
         self,

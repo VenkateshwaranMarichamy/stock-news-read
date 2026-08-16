@@ -16,6 +16,7 @@ from app.pipeline.classifier import (
     Event_Classifier,
     REQUIRED_JSON_FIELDS,
 )
+from app.pipeline.provider_manager import LLM_Provider_Manager, ProviderConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,8 +35,21 @@ VALID_SUBTYPES: dict[str, set[str]] = {
 }
 
 
+def _make_test_provider_manager() -> LLM_Provider_Manager:
+    """Build a single-provider manager with dummy credentials for unit tests."""
+    return LLM_Provider_Manager(
+        providers=[ProviderConfig(
+            name="test-provider",
+            base_url="http://localhost/v1",
+            api_key="test-key",
+            model="test-model",
+        )],
+        strategy="priority",
+    )
+
+
 def make_classifier() -> Event_Classifier:
-    return Event_Classifier(VALID_SUBTYPES)
+    return Event_Classifier(VALID_SUBTYPES, provider_manager=_make_test_provider_manager())
 
 
 def make_ok_response(
